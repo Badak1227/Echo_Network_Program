@@ -1,13 +1,14 @@
 /*
 * 이승진_20203082
 * 이름 : ESN(Echo Server_Network)
-* 목적: 
+* 목적:
 * 
 * 운영체제 : window11 와 window10
 * 개발 IDE : visual studio
 * 컴파일러 : visual studio compiler
 * 
 */
+#define _CRT_SECURE_NO_WARNINGS
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define ESC 27
 #include <stdio.h>
@@ -18,16 +19,12 @@
 #pragma comment(lib, "ws2_32.lib")
 
 void get_ip(SOCKADDR_IN* addr) {
-	char ip[33] = { 0 };
-
-
-
-	printf(" ip : %lu\n", INADDR_ANY);
-	addr->sin_addr.s_addr = inet_addr(ip);
+	printf(" ip : %s\n", "127.0.0.1");
+	addr->sin_addr.s_addr = inet_addr("127.0.0.1");//htonl(INADDR_ANY);
 }
 
 void get_port(SOCKADDR_IN* addr) {
-	u_short port = 2001;
+	u_short port = 3000;
 
 	printf(" port : %d\n", port);
 	addr->sin_port = htons(port);
@@ -38,7 +35,7 @@ int server_init() {
 	SOCKET receiver, sender;
 	SOCKADDR_IN server_addr, client_addr;
 
-	int client_addr_size, loop = 0;
+	int client_addr_size, loop = 0, port = 1025;
 	char type = 0;
 	system("cls");
 
@@ -61,15 +58,15 @@ int server_init() {
 			system("cls");
 			printf(" Open TCP socket...  ");
 
-			receiver = socket(AF_INET, SOCK_DGRAM, 0);
+			receiver = socket(AF_INET, SOCK_STREAM, 0);
 		}
 		//UDP 서버 생성
 		else if (type == 'u' || type == 'U') {
 
 			system("cls");
-			printf(" Open TCP socket...  ");
+			printf(" Open UDP socket...  ");
 
-			receiver = socket(AF_INET, SOCK_STREAM, 0);
+			receiver = socket(AF_INET, SOCK_DGRAM, 0);
 		}
 		//뒤로 가기
 		else if (type == ESC) {
@@ -85,42 +82,53 @@ int server_init() {
 		}
 	} while (loop);
 
-	if ((int)receiver == -1) printf("failed.\n");
-	else {
-		printf("success.\n");
-
-		server_addr.sin_family = AF_INET;
-		get_ip(&server_addr);
-		get_port(&server_addr);
-
-		if (bind(receiver, (struct sockaddr*)&server_addr, sizeof(server_addr)) != 0) {
-			printf(" Socket bind failed.\n");
-
-			closesocket(receiver);
-			WSACleanup();
-			return 0;
-		}
-
-		while (1) {
-			if (listen(receiver, 1) != 0) {
-				printf(" Socket listen failed.\n");
-
-				closesocket(receiver);
-				WSACleanup();
-				return 0;
-			}
-
-			sender = accept(receiver, (struct sockaddr*)&client_addr, &client_addr_size);
-
-			if (sender == -1) printf(" Accept failed.\n");
-			else {
-				//받은 메시지 처리 구현
-			}
-		}
-		
-		closesocket(receiver);
+	//소켓 생성 오류 확인
+	if (receiver == -1) {
+		printf("failed.\n");
+		WSACleanup();
+		return 0;
 	}
-	
+	printf("success.\n");
+
+	//bind() 및 오류확인
+	server_addr.sin_family = AF_INET;
+	get_ip(&server_addr);
+
+	for (port = 2000; port < 65536; port++) {
+		server_addr.sin_port = htons(port);
+		if (bind(receiver, (struct sockaddr*)&server_addr, sizeof(server_addr)) == 0) break;
+	}
+
+	if (port == 65536) {
+		printf(" Socket bind failed.\n");
+			
+		closesocket(receiver);
+		WSACleanup();
+		return 0;
+	}
+	else printf(" port : %d\n", port);
+
+	//listen() 및 오류 확인
+	if (listen(receiver, 1) == -1) {
+		printf(" Socket listen failed.\n");
+
+		closesocket(receiver);
+		WSACleanup();
+		return 0;
+	}
+
+	//accept() 및 오류 확인
+	while (1) {
+		if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) break;
+
+		sender = accept(receiver, (struct sockaddr*)&client_addr, &client_addr_size);
+
+		if (sender != -1) {
+			printf("1");
+		}
+	}
+		
+	closesocket(receiver);
 	WSACleanup();
 	return 0;
 }
