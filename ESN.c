@@ -35,8 +35,9 @@ int server_init() {
 	SOCKET receiver, sender;
 	SOCKADDR_IN server_addr, client_addr;
 
-	int client_addr_size, loop = 0, port = 1025;
+	int client_addr_size, len = 0, loop = 0, port = 1025;
 	char type = 0;
+	char* msg[1501] = { 0 };
 	system("cls");
 
 	if (WSAStartup(MAKEWORD(2, 2), &wsa_init)) {
@@ -48,7 +49,7 @@ int server_init() {
 	do {
 		loop = 0;
 
-		printf(" Use TCP or UDP\n TCP | T or t\n UDP | U or u\n Back | esc\n\n Enter: ");
+		printf(" Use TCP or UDP\n\n TCP | T or t\n UDP | U or u\n Back | esc\n\n Enter: ");
 		type = _getch();
 		fflush(stdin);
 
@@ -108,25 +109,66 @@ int server_init() {
 	}
 	else printf(" port : %d\n", port);
 
-	//listen() 및 오류 확인
-	if (listen(receiver, 1) == -1) {
-		printf(" Socket listen failed.\n");
+	
+	if (type == 't' || type == 'T') {
+		//listen() 및 오류 확인 - TCP서버는 listen()을 통해 연결 대기 필요
+		if (listen(receiver, 1) == -1) {
+			printf(" Socket listen failed.\n");
 
-		closesocket(receiver);
-		WSACleanup();
-		return 0;
-	}
+			closesocket(receiver);
+			WSACleanup();
+			return 0;
+		}
 
-	//accept() 및 오류 확인
-	while (1) {
-		if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) break;
+		printf("\n End program | esc");
 
-		sender = accept(receiver, (struct sockaddr*)&client_addr, &client_addr_size);
+		//accept() 및 오류 확인 - TCP서버는 accept()를 이용
+		while (1) {
+			if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) break;
 
-		if (sender != -1) {
-			printf("1");
+			sender = accept(receiver, (struct sockaddr*)&client_addr, &client_addr_size);
+
+			//500byte씩 받은 메세지를 읽기
+			if (sender != -1) {
+
+				len = recv(sender, msg, 1500, 0);
+
+				if (len > 0) {
+					printf(" received :  ");
+					 do {
+						 printf("%s", msg);
+
+						send(sender, msg, len, 0);
+
+						len = recv(sender, msg, 1500, 0);
+					 } while (len > 0);
+					printf("\n");
+				}
+			}
 		}
 	}
+	//UDP서버는 listen() 연결대기 불필요, accept() 연결수락 불필요
+	else if (type == 'u' || type == 'U') {
+		//accept() 및 
+		while (1) {
+			if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) break;
+
+			len = recvfrom(receiver, msg, 1500, 0, (struct sockaddr*)&client_addr, &client_addr_size);
+
+			if (len > 0) {
+				printf(" received :  ");
+				 do {
+					printf("%s", msg);
+
+					sendto(receiver, msg, len, 0, (struct sockaddr*)&client_addr, client_addr_size);
+
+					len = recvfrom(receiver, msg, 1500, 0, (struct sockaddr*)&client_addr, &client_addr_size);
+				 } while (len > 0);
+				printf("\n");
+			}
+		}
+	}
+	
 		
 	closesocket(receiver);
 	WSACleanup();
@@ -232,7 +274,7 @@ int main() {
 		}
 		else {
 			system("cls");
-			printf("WRONG INPUT OCCURED\n");
+			printf(" WRONG INPUT OCCURED\n");
 			loop = 1;
 		}
 	} while(loop);
