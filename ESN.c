@@ -36,8 +36,7 @@ int server_init() {
 	SOCKADDR_IN server_addr, client_addr;
 
 	int client_addr_size, len = 0, loop = 0, port = 1025;
-	char type = 0;
-	char* msg[1501] = { 0 };
+	char type = 0, msg[1501] = { 0 };
 	system("cls");
 
 	if (WSAStartup(MAKEWORD(2, 2), &wsa_init)) {
@@ -109,6 +108,7 @@ int server_init() {
 	}
 	else printf(" port : %d\n", port);
 
+	printf("\n End program | esc\n");
 	
 	if (type == 't' || type == 'T') {
 		//listen() 및 오류 확인 - TCP서버는 listen()을 통해 연결 대기 필요
@@ -120,15 +120,13 @@ int server_init() {
 			return 0;
 		}
 
-		printf("\n End program | esc");
-
 		//accept() 및 오류 확인 - TCP서버는 accept()를 이용
 		while (1) {
 			if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) break;
 
 			sender = accept(receiver, (struct sockaddr*)&client_addr, &client_addr_size);
 
-			//500byte씩 받은 메세지를 읽기
+			//1500byte씩 받은 메세지를 읽어들이기
 			if (sender != -1) {
 
 				len = recv(sender, msg, 1500, 0);
@@ -149,7 +147,7 @@ int server_init() {
 	}
 	//UDP서버는 listen() 연결대기 불필요, accept() 연결수락 불필요
 	else if (type == 'u' || type == 'U') {
-		//accept() 및 
+		//recvfrom을 통해 받은 메시지 바로 읽어들이기
 		while (1) {
 			if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) break;
 
@@ -168,7 +166,6 @@ int server_init() {
 			}
 		}
 	}
-	
 		
 	closesocket(receiver);
 	WSACleanup();
@@ -178,8 +175,10 @@ int server_init() {
 int client_init() {
 	WSADATA wsa_init;
 	SOCKET sender;
-	int loop = 0;
-	char type = 0;
+	SOCKADDR_IN server_addr;
+
+	int server_addr_size, loop = 0, len = 0, server_port = 1025;
+	char type = 0, msg[1501] = { 0 }, server_ip[117] = { 0 };
 	system("cls");
 
 	if (WSAStartup(MAKEWORD(2, 2), &wsa_init) != 0) {
@@ -238,9 +237,68 @@ int client_init() {
 	else {
 		printf("success.\n");
 
-		while (1) {
-			//connect();
+		printf("Enter server ip : ");
+		scanf("%s", server_ip);
+		printf("Enter server port : ");
+		scanf("%d", &server_port);
 
+		server_addr.sin_family = AF_INET;
+		server_addr.sin_addr.s_addr = inet_addr(server_ip);
+		server_addr.sin_port = htons((u_short)server_port);
+
+		while (1) {
+
+			if (type == 't' || type == 'T') {
+
+				if (connect(sender, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+					printf(" Server connect failed.\n");
+				}
+				else {
+					printf(" send :  ");
+					len = scanf("%s", msg);
+
+					send(sender, msg, len, 0);
+
+					len = recv(sender, msg, 1500, 0);
+
+					if (len > 0) {
+						printf(" received :  ");
+						do {
+							printf("%s", msg);
+
+							send(sender, msg, len, 0);
+
+							len = recv(sender, msg, 1500, 0);
+						} while (len > 0);
+						printf("\n\n");
+					}
+				}
+			}
+			else if (type == 'u' || type == 'U') {
+				printf(" send :  ");
+				len = scanf("%s", msg);
+
+				sendto(sender, msg, len, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
+
+				while (1) {
+					len = recvfrom(sender, msg, 1500, 0, (struct sockaddr*)&server_addr, &server_addr_size);
+
+					if (len > 0) {
+						printf(" received :  ");
+						do {
+							printf("%s", msg);
+
+
+							len = recvfrom(sender, msg, 1500, 0, (struct sockaddr*)&server_addr, &server_addr_size);
+						} while (len > 0);
+						printf("\n\n");
+					}
+				}
+			}
+
+			printf("\n Send more | any key\n End program | esc\n\n");
+
+			if (_getch(stdin) == 27) break;
 		}
 
 		closesocket(sender);
