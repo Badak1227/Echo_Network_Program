@@ -2,11 +2,11 @@
 * 이승진_20203082
 * 이름 : ESN(Echo Server_Network)
 * 목적:
-* 
+*
 * 운영체제 : window11 와 window10
 * 개발 IDE : visual studio
 * 컴파일러 : visual studio compiler
-* 
+* IPv4
 */
 #define _CRT_SECURE_NO_WARNINGS
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
@@ -30,60 +30,26 @@ void get_port(SOCKADDR_IN* addr) {
 	addr->sin_port = htons(port);
 }
 
-int server_init() {
+int tcp_server() {
 	WSADATA wsa_init;
-	SOCKET receiver, sender;
+	SOCKET server, client;
 	SOCKADDR_IN server_addr, client_addr;
 
-	int client_addr_size, len = 0, loop = 0, port = 1025;
+	int client_addr_size, len = 0, loop = 0, port = 2000;
 	char type = 0, msg[1501] = { 0 };
-	system("cls");
 
 	if (WSAStartup(MAKEWORD(2, 2), &wsa_init)) {
 		printf(" WSA init failed\n");
 		return 0;
 	}
 
-	//TCP 방식으로 통신할지 UDP 방식으로 통신할지 선택
-	do {
-		loop = 0;
+	system("cls");
+	printf(" Open TCP socket...  ");
 
-		printf(" Use TCP or UDP\n\n TCP | T or t\n UDP | U or u\n Back | esc\n\n Enter: ");
-		type = _getch();
-		fflush(stdin);
-
-		//TCP 서버 생성
-		if (type == 't' || type == 'T') {
-
-			system("cls");
-			printf(" Open TCP socket...  ");
-
-			receiver = socket(AF_INET, SOCK_STREAM, 0);
-		}
-		//UDP 서버 생성
-		else if (type == 'u' || type == 'U') {
-
-			system("cls");
-			printf(" Open UDP socket...  ");
-
-			receiver = socket(AF_INET, SOCK_DGRAM, 0);
-		}
-		//뒤로 가기
-		else if (type == ESC) {
-			system("cls");
-			WSACleanup();
-			return 1;
-		}
-		//잘못된 입력
-		else {
-			system("cls");
-			printf(" WRONG INPUT OCCURED\n");
-			loop = 1;
-		}
-	} while (loop);
+	server = socket(AF_INET, SOCK_STREAM, 0);
 
 	//소켓 생성 오류 확인
-	if (receiver == -1) {
+	if (server == -1) {
 		printf("failed.\n");
 		WSACleanup();
 		return 0;
@@ -96,85 +62,138 @@ int server_init() {
 
 	for (port = 2000; port < 65536; port++) {
 		server_addr.sin_port = htons(port);
-		if (bind(receiver, (struct sockaddr*)&server_addr, sizeof(server_addr)) == 0) break;
+		if (bind(server, (struct sockaddr*)&server_addr, sizeof(server_addr)) == 0) break;
 	}
 
 	if (port == 65536) {
 		printf(" Socket bind failed.\n");
-			
-		closesocket(receiver);
+
+		closesocket(server);
+		WSACleanup();
+		return 0;
+	}
+	else printf(" port : %d\n", port);
+	
+	//listen() 및 오류 확인 - TCP서버는 listen()을 통해 연결 대기 필요
+	if (listen(server, 5) == -1) {
+		printf(" Socket listen failed.\n");
+
+		closesocket(server);
+		WSACleanup();
+		return 0;
+	}
+
+	printf(" Back | esc\n\n");
+
+	while (1) {
+		if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) break;
+
+		//accept() 및 오류 확인 - TCP서버는 accept()를 이용
+		client = accept(server, (struct sockaddr*)&client_addr, &client_addr_size);
+
+		//1500byte씩 받은 메세지를 읽어들이기
+		while (client != -1) {
+
+			len = recv(client, msg, 1500, 0);
+
+			if (len > 0) {
+				printf(" received :  ");
+				do {
+					printf("%s", msg);
+
+					send(client, msg, len, 0);
+
+					len = recv(client, msg, 1500, 0);
+				} while (len > 0);
+				printf("\n");
+
+				closesocket(client);
+				client = -1;
+				break;
+			}
+		}
+	}
+
+	closesocket(server);
+	WSACleanup();
+	system("cls");
+	return 1;
+}
+
+int udp_server() {
+	WSADATA wsa_init;
+	SOCKET server, client;
+	SOCKADDR_IN server_addr, client_addr;
+
+	int client_addr_size, len = 0, loop = 0, port = 2000;
+	char type = 0, msg[1501] = { 0 };
+
+	if (WSAStartup(MAKEWORD(2, 2), &wsa_init)) {
+		printf(" WSA init failed\n");
+		return 0;
+	}
+
+	system("cls");
+	printf(" Open TCP socket...  ");
+
+	server = socket(AF_INET, SOCK_DGRAM, 0);
+
+	//소켓 생성 오류 확인
+	if (server == -1) {
+		printf("failed.\n");
+		WSACleanup();
+		return 0;
+	}
+	printf("success.\n");
+
+	//bind() 및 오류확인
+	server_addr.sin_family = AF_INET;
+	get_ip(&server_addr);
+
+	for (port = 2000; port < 65536; port++) {
+		server_addr.sin_port = htons(port);
+		if (bind(server, (struct sockaddr*)&server_addr, sizeof(server_addr)) == 0) break;
+	}
+
+	if (port == 65536) {
+		printf(" Socket bind failed.\n");
+
+		closesocket(server);
 		WSACleanup();
 		return 0;
 	}
 	else printf(" port : %d\n", port);
 
-	printf("\n End program | esc\n");
-	
-	if (type == 't' || type == 'T') {
-		//listen() 및 오류 확인 - TCP서버는 listen()을 통해 연결 대기 필요
-		if (listen(receiver, 1) == -1) {
-			printf(" Socket listen failed.\n");
+	printf(" Back | esc\n\n");
 
-			closesocket(receiver);
-			WSACleanup();
-			return 0;
-		}
+	//recvfrom을 통해 받은 메시지 바로 읽어들이기
+	while (1) {
+		if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) break;
 
-		//accept() 및 오류 확인 - TCP서버는 accept()를 이용
-		while (1) {
-			if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) break;
+		len = recvfrom(server, msg, 1500, 0, (struct sockaddr*)&client_addr, &client_addr_size);
 
-			sender = accept(receiver, (struct sockaddr*)&client_addr, &client_addr_size);
+		if (len > 0) {
+			printf(" received :  ");
+			do {
+				printf("%s", msg);
 
-			//1500byte씩 받은 메세지를 읽어들이기
-			if (sender != -1) {
+				sendto(server, msg, len, 0, (struct sockaddr*)&client_addr, client_addr_size);
 
-				len = recv(sender, msg, 1500, 0);
-
-				if (len > 0) {
-					printf(" received :  ");
-					 do {
-						 printf("%s", msg);
-
-						send(sender, msg, len, 0);
-
-						len = recv(sender, msg, 1500, 0);
-					 } while (len > 0);
-					printf("\n");
-				}
-			}
+				len = recvfrom(server, msg, 1500, 0, (struct sockaddr*)&client_addr, &client_addr_size);
+			} while (len > 0);
+			printf("\n");
 		}
 	}
-	//UDP서버는 listen() 연결대기 불필요, accept() 연결수락 불필요
-	else if (type == 'u' || type == 'U') {
-		//recvfrom을 통해 받은 메시지 바로 읽어들이기
-		while (1) {
-			if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) break;
 
-			len = recvfrom(receiver, msg, 1500, 0, (struct sockaddr*)&client_addr, &client_addr_size);
-
-			if (len > 0) {
-				printf(" received :  ");
-				 do {
-					printf("%s", msg);
-
-					sendto(receiver, msg, len, 0, (struct sockaddr*)&client_addr, client_addr_size);
-
-					len = recvfrom(receiver, msg, 1500, 0, (struct sockaddr*)&client_addr, &client_addr_size);
-				 } while (len > 0);
-				printf("\n");
-			}
-		}
-	}
-		
-	closesocket(receiver);
+	closesocket(server);
 	WSACleanup();
-	return 0;
+	system("cls");
+	return 1;
 }
 
-int client_init() {
+int tcp_client() {
 	WSADATA wsa_init;
-	SOCKET sender;
+	SOCKET client;
 	SOCKADDR_IN server_addr;
 
 	int server_addr_size, loop = 0, len = 0, server_port = 1025;
@@ -186,146 +205,176 @@ int client_init() {
 		return 0;
 	}
 
-	//TCP 방식으로 통신할지 UDP 방식으로 통신할지 선택
-	do {
-		loop = 0;
+	printf(" Open TCP socket...  ");
 
-		printf(" Use TCP or UDP\n TCP | T or t\n UDP | U or u\n Back | esc\n\n Enter: ");
-		type = _getch();
-		fflush(stdin);
+	client = socket(AF_INET, SOCK_STREAM, 0);
 
-		//TCP 소켓 생성
-		if (type == 't' || type == 'T') {
-			
-			system("cls");
-			printf(" Open TCP socket...  ");
-
-			sender = socket(AF_INET, SOCK_DGRAM, 0);
-			
-			
-		}
-		//UDP 소켓 생성
-		else if (type == 'u' || type == 'U') {
-
-			system("cls");
-			printf(" Open UDP socket...  ");
-
-			sender = socket(AF_INET, SOCK_STREAM, 0);
-
-			if ((int)sender == -1) {
-				printf("failed.\n");
-				return 0;
-			}
-
-			closesocket(sender);
-		}
-		//뒤로가기
-		else if (type == ESC) {
-			system("cls");
-			WSACleanup();
-			return 1;
-		}
-		//잘못된 입력
-		else {
-			system("cls");
-			printf(" WRONG INPUT OCCURED\n");
-			loop = 1;
-		}
-	} while (loop);
-	
-	if ((int)sender == -1) printf("failed.\n");
-	else {
-		printf("success.\n");
-
-		printf("Enter server ip : ");
-		scanf("%s", server_ip);
-		printf("Enter server port : ");
-		scanf("%d", &server_port);
-
-		server_addr.sin_family = AF_INET;
-		server_addr.sin_addr.s_addr = inet_addr(server_ip);
-		server_addr.sin_port = htons((u_short)server_port);
-
-		while (1) {
-
-			if (type == 't' || type == 'T') {
-
-				if (connect(sender, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
-					printf(" Server connect failed.\n");
-				}
-				else {
-					printf(" send :  ");
-					len = scanf("%s", msg);
-
-					send(sender, msg, len, 0);
-
-					len = recv(sender, msg, 1500, 0);
-
-					if (len > 0) {
-						printf(" received :  ");
-						do {
-							printf("%s", msg);
-
-							send(sender, msg, len, 0);
-
-							len = recv(sender, msg, 1500, 0);
-						} while (len > 0);
-						printf("\n\n");
-					}
-				}
-			}
-			else if (type == 'u' || type == 'U') {
-				printf(" send :  ");
-				len = scanf("%s", msg);
-
-				sendto(sender, msg, len, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
-
-				while (1) {
-					len = recvfrom(sender, msg, 1500, 0, (struct sockaddr*)&server_addr, &server_addr_size);
-
-					if (len > 0) {
-						printf(" received :  ");
-						do {
-							printf("%s", msg);
-
-
-							len = recvfrom(sender, msg, 1500, 0, (struct sockaddr*)&server_addr, &server_addr_size);
-						} while (len > 0);
-						printf("\n\n");
-					}
-				}
-			}
-
-			printf("\n Send more | any key\n End program | esc\n\n");
-
-			if (_getch(stdin) == 27) break;
-		}
-
-		closesocket(sender);
+	//소켓 생성 오류 확인
+	if (client == -1) {
+		printf("failed.\n");
+		WSACleanup();
+		return 0;
 	}
-	
-	WSACleanup();
+	printf("success.\n");
 
-	return 0;
+	printf("Enter server ip : ");
+	scanf("%s", server_ip);
+	printf("Enter server port : ");
+	scanf("%d", &server_port);
+
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_addr.s_addr = inet_addr(server_ip);
+	server_addr.sin_port = htons((u_short)server_port);
+
+	if (connect(client, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+		printf(" Server connect failed.\n");
+
+		WSACleanup();
+		return 0;
+	}
+
+	while (1) {
+		printf(" send :  ");
+		len = scanf("%s", msg);
+
+		send(client, msg, len, 0);
+
+		len = recv(client, msg, 1500, 0);
+
+		if (len > 0) {
+			printf(" received :  ");
+			do {
+				printf("%s", msg);
+
+				send(client, msg, len, 0);
+
+				len = recv(client, msg, 1500, 0);
+			} while (len > 0);
+			printf("\n\n");
+		}
+	}
+
+	closesocket(client);
+	WSACleanup();
+	system("cls");
+	return 1;
+}
+
+int udp_client() {
+	WSADATA wsa_init;
+	SOCKET client;
+	SOCKADDR_IN server_addr;
+
+	int server_addr_size, loop = 0, len = 0, server_port = 1025;
+	char type = 0, msg[1501] = { 0 }, server_ip[117] = { 0 };
+	system("cls");
+
+	printf(" Open UDP socket...  ");
+
+	client = socket(AF_INET, SOCK_DGRAM, 0);
+
+	//소켓 생성 오류 확인
+	if (client == -1) {
+		printf("failed.\n");
+		WSACleanup();
+		return 0;
+	}
+	printf("success.\n");
+
+	printf("Enter server ip : ");
+	scanf("%s", server_ip);
+	printf("Enter server port : ");
+	scanf("%d", &server_port);
+
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_addr.s_addr = inet_addr(server_ip);
+	server_addr.sin_port = htons((u_short)server_port);
+
+	printf(" send :  ");
+	len = scanf("%s", msg);
+
+	sendto(client, msg, len, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
+
+	while (1) {
+		len = recvfrom(client, msg, 1500, 0, (struct sockaddr*)&server_addr, &server_addr_size);
+
+		if (len > 0) {
+			printf(" received :  ");
+			do {
+				printf("%s", msg);
+
+
+				len = recvfrom(client, msg, 1500, 0, (struct sockaddr*)&server_addr, &server_addr_size);
+			} while (len > 0);
+			printf("\n\n");
+		}
+	}
+
+	closesocket(client);
+	WSACleanup();
+	system("cls");
+	return 1;
 }
 
 int main() {
-	int loop = 0;
+	int loop = 1;
 	char sc_select = 0, type = 0;
 
 	//본인이 서버인지 클라이언트인지 선택
 	do {
-		loop = 0;
-
 		printf(" Are you a server or a client?\n\n server | S or s\n client | C or c\n End program | esc\n\n ENTER: ");
 		sc_select = _getch();
 		fflush(stdin);
 
 		if (sc_select == 's' || sc_select == 'S') {
-			loop = server_init();
+			system("cls");
+			
+			//TCP 방식으로 통신할지 UDP 방식으로 통신할지 선택
+			do {
+				printf(" Use TCP or UDP\n\n TCP | T or t\n UDP | U or u\n Back | esc\n\n Enter: ");
+				type = _getch();
+				fflush(stdin);
+
+				//TCP 서버 생성
+				if (type == 't' || type == 'T') loop = tcp_server();
+				//UDP 서버 생성
+				else if (type == 'u' || type == 'U') loop = udp_server();
+				//뒤로 가기
+				else if (type == ESC) {
+					system("cls");
+					break;
+				}
+				//잘못된 입력
+				else {
+					system("cls");
+					printf(" WRONG INPUT OCCURED\n");
+				}
+			} while (loop);
 		}
 		else if (sc_select == 'c' || sc_select == 'C') {
-			loop = client_init();
+			system("cls");
+
+			//TCP 방식으로 통신할지 UDP 방식으로 통신할지 선택
+			do {
+				printf(" Use TCP or UDP\n\n TCP | T or t\n UDP | U or u\n Back | esc\n\n Enter: ");
+				type = _getch();
+				fflush(stdin);
+
+				//TCP 소켓 생성
+				if (type == 't' || type == 'T') loop = tcp_client();
+				//UDP 소켓 생성
+				else if (type == 'u' || type == 'U') loop = udp_client();
+				//뒤로가기
+				else if (type == ESC) {
+					system("cls");
+					break;
+				}
+				//잘못된 입력
+				else {
+					system("cls");
+					printf(" WRONG INPUT OCCURED\n");
+				}
+			} while (loop);
 		}
 		else if (sc_select == ESC) {
 			break;
@@ -333,9 +382,8 @@ int main() {
 		else {
 			system("cls");
 			printf(" WRONG INPUT OCCURED\n");
-			loop = 1;
 		}
-	} while(loop);
+	} while (loop);
 
 	printf("\n Program end");
 	return 0;
