@@ -13,6 +13,7 @@
 #define ESC 27
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <conio.h>
 #include <winsock2.h>
 
@@ -46,10 +47,10 @@ int tcp_server() {
 	system("cls");
 	printf(" Open TCP socket...  ");
 
-	server = socket(AF_INET, SOCK_STREAM, 0);
+	server = socket(PF_INET, SOCK_STREAM, 0);
 
 	//소켓 생성 오류 확인
-	if (server == -1) {
+	if (server == INVALID_SOCKET) {
 		printf("failed.\n");
 		WSACleanup();
 		return 0;
@@ -86,33 +87,31 @@ int tcp_server() {
 	printf(" Back | esc\n\n");
 
 	while (1) {
-		if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) break;
+		if (_kbhit() && _getch() == 27) break;
 
 		//accept() 및 오류 확인 - TCP서버는 accept()를 이용
+		client_addr_size = sizeof(client_addr);
 		client = accept(server, (struct sockaddr*)&client_addr, &client_addr_size);
 
-		//1500byte씩 받은 메세지를 읽어들이기
-		while (client != -1) {
+		while (recv(client, msg, 1500, 0)) {
+			
+			if (len == 0) continue;
 
-			len = recv(client, msg, 1500, 0);
+			printf(" received :  %s\n", msg);
 
-			if (len > 0) {
-				printf(" received :  ");
-				do {
-					printf("%s", msg);
+			send(client, msg, len, 0);
 
-					send(client, msg, len, 0);
-
-					len = recv(client, msg, 1500, 0);
-				} while (len > 0);
-				printf("\n");
-
-				closesocket(client);
-				client = -1;
-				break;
+			if (msg == "exit\n") {
+				closesocket(server);
+				WSACleanup();
+				system("cls");
+				return 1;
 			}
 		}
+		
 	}
+	
+	
 
 	closesocket(server);
 	WSACleanup();
@@ -170,19 +169,12 @@ int udp_server() {
 	while (1) {
 		if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) break;
 
-		len = recvfrom(server, msg, 1500, 0, (struct sockaddr*)&client_addr, &client_addr_size);
+		recvfrom(server, msg, 1500, 0, (struct sockaddr*)&client_addr, &client_addr_size);
 
-		if (len > 0) {
-			printf(" received :  ");
-			do {
-				printf("%s", msg);
+		printf(" received :  ");
+		printf("%s\n", msg);
 
-				sendto(server, msg, len, 0, (struct sockaddr*)&client_addr, client_addr_size);
-
-				len = recvfrom(server, msg, 1500, 0, (struct sockaddr*)&client_addr, &client_addr_size);
-			} while (len > 0);
-			printf("\n");
-		}
+		sendto(server, msg, len, 0, (struct sockaddr*)&client_addr, client_addr_size);
 	}
 
 	closesocket(server);
@@ -217,9 +209,9 @@ int tcp_client() {
 	}
 	printf("success.\n");
 
-	printf("Enter server ip : ");
+	printf(" Enter server ip : ");
 	scanf("%s", server_ip);
-	printf("Enter server port : ");
+	printf(" Enter server port : ");
 	scanf("%d", &server_port);
 
 	server_addr.sin_family = AF_INET;
@@ -233,27 +225,30 @@ int tcp_client() {
 		return 0;
 	}
 
-	while (1) {
-		printf(" send :  ");
-		len = scanf("%s", msg);
+	printf(" send :  ");
+	//fgets(msg, 1500, stdin);
+	scanf("%s", msg);
 
-		send(client, msg, len, 0);
+	send(client, msg, strlen(msg), 0);
 
-		len = recv(client, msg, 1500, 0);
+	printf("sended\n");
 
-		if (len > 0) {
-			printf(" received :  ");
-			do {
-				printf("%s", msg);
+	len = recv(client, msg, 1500, 0);
+	
+	printf("received\n");
 
-				send(client, msg, len, 0);
+	if (len > 0) {
+		printf(" received :  ");
+		do {
+			printf("%s", msg);
 
-				len = recv(client, msg, 1500, 0);
-			} while (len > 0);
-			printf("\n\n");
-		}
+			send(client, msg, len, 0);
+
+			len = recv(client, msg, 1500, 0);
+		} while (len > 0);
+		printf("\n\n");
 	}
-
+	
 	closesocket(client);
 	WSACleanup();
 	system("cls");
@@ -291,23 +286,21 @@ int udp_client() {
 	server_addr.sin_port = htons((u_short)server_port);
 
 	printf(" send :  ");
-	len = scanf("%s", msg);
+	fgets(msg, 1500, stdin);
 
 	sendto(client, msg, len, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
 
-	while (1) {
-		len = recvfrom(client, msg, 1500, 0, (struct sockaddr*)&server_addr, &server_addr_size);
+	len = recvfrom(client, msg, 1500, 0, (struct sockaddr*)&server_addr, &server_addr_size);
 
-		if (len > 0) {
-			printf(" received :  ");
-			do {
-				printf("%s", msg);
+	if (len > 0) {
+		printf(" received :  ");
+		do {
+			printf("%s", msg);
 
 
-				len = recvfrom(client, msg, 1500, 0, (struct sockaddr*)&server_addr, &server_addr_size);
-			} while (len > 0);
-			printf("\n\n");
-		}
+			len = recvfrom(client, msg, 1500, 0, (struct sockaddr*)&server_addr, &server_addr_size);
+		} while (len > 0);
+		printf("\n\n");
 	}
 
 	closesocket(client);
