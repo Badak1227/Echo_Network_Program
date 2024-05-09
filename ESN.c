@@ -47,7 +47,7 @@ int tcp_server() {
 	system("cls");
 	printf(" Open TCP socket...  ");
 
-	server = socket(PF_INET, SOCK_STREAM, 0);
+	server = socket(AF_INET, SOCK_STREAM, 0);
 
 	//소켓 생성 오류 확인
 	if (server == INVALID_SOCKET) {
@@ -87,8 +87,6 @@ int tcp_server() {
 	printf(" Back | esc\n\n");
 
 	while (1) {
-		if (_kbhit() && _getch() == 27) break;
-
 		//accept() 및 오류 확인 - TCP서버는 accept()를 이용
 		client_addr_size = sizeof(client_addr);
 		client = accept(server, (struct sockaddr*)&client_addr, &client_addr_size);
@@ -101,7 +99,7 @@ int tcp_server() {
 
 			send(client, msg, len, 0);
 
-			if (msg == "exit\n") {
+			if (strcmp(msg ,"exit")) {
 				closesocket(server);
 				WSACleanup();
 				system("cls");
@@ -111,8 +109,6 @@ int tcp_server() {
 		
 	}
 	
-	
-
 	closesocket(server);
 	WSACleanup();
 	system("cls");
