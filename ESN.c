@@ -35,6 +35,7 @@ int tcp_server() {
 	WSADATA wsa_init;
 	SOCKET server, client;
 	SOCKADDR_IN server_addr, client_addr;
+	u_long socket_mode = 1; //비동기 소켓 모드
 
 	int client_addr_size, len = 0, loop = 0, port = 2000;
 	char type = 0, msg[1501] = { 0 };
@@ -48,6 +49,7 @@ int tcp_server() {
 	printf(" Open TCP socket...  ");
 
 	server = socket(AF_INET, SOCK_STREAM, 0);
+	ioctlsocket(server, FIONBIO, &socket_mode);
 
 	//소켓 생성 오류 확인
 	if (server == INVALID_SOCKET) {
@@ -86,27 +88,39 @@ int tcp_server() {
 
 	printf(" Back | esc\n\n");
 
+	client_addr_size = sizeof(client_addr);
+
 	while (1) {
-		//accept() 및 오류 확인 - TCP서버는 accept()를 이용
-		client_addr_size = sizeof(client_addr);
+		if (_kbhit() && _getch() == 27) break;
+
+		//accept() 및 오류 확인 - TCP서버는 accept()를 이용	
 		client = accept(server, (struct sockaddr*)&client_addr, &client_addr_size);
 
-		while (recv(client, msg, 1500, 0)) {
-			
-			if (len == 0) continue;
+		//클라이언트 연결이 끊어질 때 까지 message를 읽음
+		if (client != -1) printf(" Client connected\n Disconnect client | esc\n");
 
-			printf(" received :  %s\n", msg);
+		while (client != -1) {
+			if (_kbhit() && _getch() == 27) {
+				fflush(stdin);
+				printf(" Disconnect client\n");
+				break;
+			}
 
-			send(client, msg, len, 0);
+			loop = recv(client, msg, 1500, 0);
 
-			if (strcmp(msg ,"exit")) {
-				closesocket(server);
-				WSACleanup();
-				system("cls");
-				return 1;
+			//client 연결 종료
+			if (loop == 0) {
+				printf(" Client disconnected\n\n");
+				break;
+			}
+			else if (loop > 0) {
+				printf(" received :  %s\n", msg);
+				send(client, msg, strlen(msg), 0);
 			}
 		}
-		
+
+		closesocket(client);
+		client = -1;
 	}
 	
 	closesocket(server);
@@ -117,11 +131,13 @@ int tcp_server() {
 
 int udp_server() {
 	WSADATA wsa_init;
-	SOCKET server, client;
+	SOCKET server, client = -1;
 	SOCKADDR_IN server_addr, client_addr;
+	u_long socket_mode = 1; //비동기 소켓 모드
 
 	int client_addr_size, len = 0, loop = 0, port = 2000;
 	char type = 0, msg[1501] = { 0 };
+	
 
 	if (WSAStartup(MAKEWORD(2, 2), &wsa_init)) {
 		printf(" WSA init failed\n");
@@ -129,9 +145,10 @@ int udp_server() {
 	}
 
 	system("cls");
-	printf(" Open TCP socket...  ");
+	printf(" Open UDP socket...  ");
 
 	server = socket(AF_INET, SOCK_DGRAM, 0);
+	ioctlsocket(server, FIONBIO, &socket_mode);
 
 	//소켓 생성 오류 확인
 	if (server == -1) {
@@ -162,15 +179,16 @@ int udp_server() {
 	printf(" Back | esc\n\n");
 
 	//recvfrom을 통해 받은 메시지 바로 읽어들이기
+	client_addr_size = sizeof(client_addr);
 	while (1) {
-		if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) break;
+		if (recvfrom(server, msg, 1500, 0, (struct sockaddr*)&client_addr, &client_addr_size) != -1) {
+			printf(" received :  %s  FROM %s\n", msg, inet_ntoa(client_addr.sin_addr));
 
-		recvfrom(server, msg, 1500, 0, (struct sockaddr*)&client_addr, &client_addr_size);
-
-		printf(" received :  ");
-		printf("%s\n", msg);
-
-		sendto(server, msg, len, 0, (struct sockaddr*)&client_addr, client_addr_size);
+			sendto(server, msg, len, 0, (struct sockaddr*)&client_addr, client_addr_size);
+		
+			closesocket(client);
+			client = -1;
+		}
 	}
 
 	closesocket(server);
@@ -183,9 +201,10 @@ int tcp_client() {
 	WSADATA wsa_init;
 	SOCKET client;
 	SOCKADDR_IN server_addr;
+	u_long socket_mode = 1; //비동기 소켓 모드
 
 	int server_addr_size, loop = 0, len = 0, server_port = 1025;
-	char type = 0, msg[1501] = { 0 }, server_ip[117] = { 0 };
+	char type = 0, msg[1501] = { 0 }, server_ip[40] = { 0 };
 	system("cls");
 
 	if (WSAStartup(MAKEWORD(2, 2), &wsa_init) != 0) {
@@ -196,10 +215,13 @@ int tcp_client() {
 	printf(" Open TCP socket...  ");
 
 	client = socket(AF_INET, SOCK_STREAM, 0);
+	ioctlsocket(client, FIONBIO, &socket_mode);
 
 	//소켓 생성 오류 확인
 	if (client == -1) {
 		printf("failed.\n");
+
+		closesocket(client);
 		WSACleanup();
 		return 0;
 	}
@@ -217,34 +239,33 @@ int tcp_client() {
 	if (connect(client, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
 		printf(" Server connect failed.\n");
 
+		closesocket(client);
 		WSACleanup();
-		return 0;
+		return 1;
 	}
 
-	printf(" send :  ");
-	//fgets(msg, 1500, stdin);
-	scanf("%s", msg);
+	while (1) {
+		printf(" send :  ");
+		scanf("%s", msg);
+		fflush(stdin);
 
-	send(client, msg, strlen(msg), 0);
+		if (send(client, msg, strlen(msg), 0) == -1) {
+			printf(" Send message failed\n");
+			break;
+		}
 
-	printf("sended\n");
+		if (recv(client, msg, 1500, 0) == -1) {
+			printf(" Receive message failed\n");
+			break;
+		}
 
-	len = recv(client, msg, 1500, 0);
-	
-	printf("received\n");
+		printf(" received :  %s\n", msg);
 
-	if (len > 0) {
-		printf(" received :  ");
-		do {
-			printf("%s", msg);
-
-			send(client, msg, len, 0);
-
-			len = recv(client, msg, 1500, 0);
-		} while (len > 0);
-		printf("\n\n");
+		printf("\n send more?\n YES | Any key     NO | N or n\n\n");
+		
+		loop = _getch();
+		if (loop == 'n' || loop == 'N') break;
 	}
-	
 	closesocket(client);
 	WSACleanup();
 	system("cls");
@@ -255,14 +276,21 @@ int udp_client() {
 	WSADATA wsa_init;
 	SOCKET client;
 	SOCKADDR_IN server_addr;
+	u_long socket_mode = 1; //비동기 소켓 모드
 
 	int server_addr_size, loop = 0, len = 0, server_port = 1025;
-	char type = 0, msg[1501] = { 0 }, server_ip[117] = { 0 };
+	char type = 0, msg[1501] = { 0 }, server_ip[40] = { 0 };
 	system("cls");
+
+	if (WSAStartup(MAKEWORD(2, 2), &wsa_init) != 0) {
+		printf(" WSA init failed.\n");
+		return 0;
+	}
 
 	printf(" Open UDP socket...  ");
 
 	client = socket(AF_INET, SOCK_DGRAM, 0);
+	ioctlsocket(client, FIONBIO, &socket_mode);
 
 	//소켓 생성 오류 확인
 	if (client == -1) {
@@ -281,22 +309,29 @@ int udp_client() {
 	server_addr.sin_addr.s_addr = inet_addr(server_ip);
 	server_addr.sin_port = htons((u_short)server_port);
 
-	printf(" send :  ");
-	fgets(msg, 1500, stdin);
+	server_addr_size = sizeof(server_addr);
 
-	sendto(client, msg, len, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
+	while (1) {
+		printf(" send :  ");
+		scanf("%s", msg);
+		fflush(stdin);
 
-	len = recvfrom(client, msg, 1500, 0, (struct sockaddr*)&server_addr, &server_addr_size);
+		if (sendto(client, msg, len, 0, (struct sockaddr*)&server_addr, server_addr_size) == -1) {
+			printf(" Send message failed\n");
+			break;
+		}
 
-	if (len > 0) {
-		printf(" received :  ");
-		do {
-			printf("%s", msg);
+		if (recvfrom(client, msg, 1500, 0, (struct sockaddr*)&server_addr, &server_addr_size) == -1) {
+			printf(" Receive message failed\n");
+			break;
+		}
 
+		printf(" received :  %s\n", msg);
 
-			len = recvfrom(client, msg, 1500, 0, (struct sockaddr*)&server_addr, &server_addr_size);
-		} while (len > 0);
-		printf("\n\n");
+		printf("\n send more?\n YES | Any key     NO | N or n\n\n");
+
+		loop = _getch();
+		if (loop == 'n' || loop == 'N') break;
 	}
 
 	closesocket(client);
@@ -313,7 +348,6 @@ int main() {
 	do {
 		printf(" Are you a server or a client?\n\n server | S or s\n client | C or c\n End program | esc\n\n ENTER: ");
 		sc_select = _getch();
-		fflush(stdin);
 
 		if (sc_select == 's' || sc_select == 'S') {
 			system("cls");
@@ -322,7 +356,6 @@ int main() {
 			do {
 				printf(" Use TCP or UDP\n\n TCP | T or t\n UDP | U or u\n Back | esc\n\n Enter: ");
 				type = _getch();
-				fflush(stdin);
 
 				//TCP 서버 생성
 				if (type == 't' || type == 'T') loop = tcp_server();
@@ -347,7 +380,6 @@ int main() {
 			do {
 				printf(" Use TCP or UDP\n\n TCP | T or t\n UDP | U or u\n Back | esc\n\n Enter: ");
 				type = _getch();
-				fflush(stdin);
 
 				//TCP 소켓 생성
 				if (type == 't' || type == 'T') loop = tcp_client();
