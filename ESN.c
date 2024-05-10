@@ -1,6 +1,6 @@
 /*
 * 이승진_20203082
-* 이름 : ESN(Echo Server_Network)
+* 이름 : ESN(Echo_Server_Network)
 * 목적:
 *
 * 운영체제 : window11 와 window10
