@@ -1,12 +1,12 @@
 /*
 * 이승진_20203082
-* 이름 : ESN(Echo_Server_Network)
+* 이름 : ENP (Echo_Network_Program)
 * 목적:
+* TCP와 UDP를 이용한 서버와 클라이언트를 만들고 클라이언트가 서버로 메시지를 보내면 서버가 받은 메시지를 그대로 보내는 프로그램
 *
 * 운영체제 : window11 와 window10
 * 개발 IDE : visual studio
 * 컴파일러 : visual studio compiler
-* IPv4
 */
 #define _CRT_SECURE_NO_WARNINGS
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
@@ -50,13 +50,6 @@ int get_ip(SOCKADDR_IN* addr, int type) {
 	return 0;
 }
 
-void get_port(SOCKADDR_IN* addr) {
-	u_short port = 3000;
-
-	printf(" port : %d\n", port);
-	addr->sin_port = htons(port);
-}
-
 //esc등 특수 입력을 처리하기 위한 문자열 입력 함수
 int get_str(char* msg, int max) {
 	int len = 0;
@@ -96,7 +89,7 @@ int get_str(char* msg, int max) {
 
 int tcp_server() {
 	WSADATA wsa_init;
-	SOCKET server, client;
+	SOCKET server, client = -1;
 	SOCKADDR_IN server_addr, client_addr;
 	u_long socket_mode = 1; //비동기 소켓 모드
 
@@ -274,7 +267,7 @@ int udp_server() {
 
 		//recvfrom을 통해 받은 메시지 바로 읽어들이기
 		if (recvfrom(server, msg, 1500, 0, (struct sockaddr*)&client_addr, &client_addr_size) != -1) {
-			printf(" received :  %s  FROM %s\n", msg, inet_ntoa(client_addr.sin_addr));
+			printf(" received from %s  :  %s\n", inet_ntoa(client_addr.sin_addr), msg);
 
 			if (sendto(server, msg, strlen(msg), 0, (struct sockaddr*)&client_addr, client_addr_size) == -1) {
 				printf(" Send message failed\n");
@@ -333,6 +326,8 @@ int tcp_client() {
 	scanf("%d", &server_port);
 	while (getchar() != '\n');
 
+	printf(" Back | esc\n\n");
+
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_addr.s_addr = inet_addr(server_ip);
 	server_addr.sin_port = htons((u_short)server_port);
@@ -343,8 +338,6 @@ int tcp_client() {
 	while (1) {
 		printf(" send :  ");
 		len = get_str(msg, 1500);
-
-		printf("%d %s\n", len, msg);
 
 		if (len == 0) break;
 
@@ -398,18 +391,19 @@ int udp_client() {
 	printf("success.\n");
 
 	//서버 ip와 port 번호 입력
-	printf("Enter server ip : ");
+	printf(" Enter server ip : ");
 	scanf("%s", server_ip);
-	printf("Enter server port : ");
+	printf(" Enter server port : ");
 	scanf("%d", &server_port);
 	while (getchar() != '\n');
+
+	printf(" Back | esc\n\n");
 
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_addr.s_addr = inet_addr(server_ip);
 	server_addr.sin_port = htons((u_short)server_port);
 
 	server_addr_size = sizeof(server_addr);
-
 
 	while (1) {
 		printf(" send :  ");
@@ -427,10 +421,16 @@ int udp_client() {
 
 		while (1) {
 			if (recvfrom(client, msg, 1500, 0, (struct sockaddr*)&server_addr, &server_addr_size) != -1) {
-				printf(" received :  %s\n", msg);
+				printf(" received :  %s\n\n", msg);
+				break;
 			}
 		}
 	}
+
+	closesocket(client);
+	WSACleanup();
+	system("cls");
+	return 1;
 }
 
 int main() {
